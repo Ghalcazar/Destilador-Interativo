@@ -95,13 +95,12 @@ with col_dir:
 st.markdown("---")
 if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_width=True):
     
-    # --- FASE 1: Validação Rigorosa de Entradas (Gap 4 resolvido) ---
+    # --- FASE 1: Validação Rigorosa de Entradas ---
     erros = []
     for corr in correntes_todas:
         p_vals = [dados_entrada.get(f"{corr}_{comp}_Perc") for comp in nomes_comp]
         p_vals_clean = [p for p in p_vals if p is not None]
         
-        # Ajusta caso o usuário insira > 1 (ex: 50 ao invés de 0.5)
         for i, comp in enumerate(nomes_comp):
             val = dados_entrada.get(f"{corr}_{comp}_Perc")
             if val is not None and val > 1.0:
@@ -109,35 +108,36 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                 p_vals_clean[i] = val / 100.0
 
         soma_p = sum(p_vals_clean)
-        
         if soma_p > 1.0001:
             erros.append(f"**{corr}**: A soma das frações excede 100% ({soma_p*100:.2f}%).")
         elif len(p_vals_clean) == num_componentes and soma_p < 0.9999:
-            erros.append(f"**{corr}**: Todas as frações foram informadas, mas não somam 100% (Somam {soma_p*100:.2f}%).")
+            erros.append(f"**{corr}**: Todas as frações informadas não somam 100% (Somam {soma_p*100:.2f}%).")
 
     if erros:
         st.error("⚠️ Inconsistências físicas encontradas nas entradas:")
         for erro in erros: st.warning(erro)
         st.stop()
 
-    # --- FASE 2: Modelagem do Sistema A * x = B (Gap 1 resolvido) ---
-    # Variáveis x: [m_c1_ent, m_c2_ent..., m_c1_sai1, m_c2_sai1...]
+    # --- FASE 2: Modelagem do Sistema e Rastreabilidade ---
     num_vars = num_total_correntes * num_componentes
+    nomes_variaveis = [f"Massa de {comp} em {corr}" for corr in correntes_todas for comp in nomes_comp]
+    
     A_list = []
     B_list = []
+    descricoes_equacoes = [] # Guarda o significado físico de cada equação
 
-    # 1. Equações de Balanço Global por Componente (Entrada = Saídas)
-    for c in range(num_componentes):
+    # 1. Equações de Balanço Global por Componente
+    for c, comp in enumerate(nomes_comp):
         eq = np.zeros(num_vars)
-        eq[0 * num_componentes + c] = 1.0 # Índice da Entrada
+        eq[0 * num_componentes + c] = 1.0 
         for s in range(1, num_total_correntes):
-            eq[s * num_componentes + c] = -1.0 # Índices das Saídas
+            eq[s * num_componentes + c] = -1.0 
         A_list.append(eq)
         B_list.append(0.0)
+        descricoes_equacoes.append(f"Conservação do componente '{comp}' (Entrada = Todas as Saídas)")
 
     # 2. Equações baseadas nos inputs do usuário
     for s, corr in enumerate(correntes_todas):
-        # Se Vazão Total informada: Sum(m_c) = V_tot
         v_tot = dados_entrada.get(f"{corr}_VazaoTotal")
         if v_tot is not None:
             eq = np.zeros(num_vars)
@@ -145,17 +145,17 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                 eq[s * num_componentes + c] = 1.0
             A_list.append(eq)
             B_list.append(v_tot)
+            descricoes_equacoes.append(f"Soma das massas parciais em '{corr}' fixada em {v_tot} kg/h")
 
         for c, comp in enumerate(nomes_comp):
-            # Se Vazão Parcial informada: m_c = V_comp
             v_comp = dados_entrada.get(f"{corr}_{comp}_Vazao")
             if v_comp is not None:
                 eq = np.zeros(num_vars)
                 eq[s * num_componentes + c] = 1.0
                 A_list.append(eq)
                 B_list.append(v_comp)
+                descricoes_equacoes.append(f"Vazão específica de '{comp}' em '{corr}' fixada em {v_comp} kg/h")
 
-            # Se Fração informada: m_c = % * V_tot -> m_c - % * Sum(m_k) = 0
             p_comp = dados_entrada.get(f"{corr}_{comp}_Perc")
             if p_comp is not None:
                 eq = np.zeros(num_vars)
@@ -166,40 +166,50 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                         eq[s * num_componentes + k] = -p_comp
                 A_list.append(eq)
                 B_list.append(0.0)
+                descricoes_equacoes.append(f"Proporção de '{comp}' em '{corr}' amarrada em {p_comp*100:.2f}% do total da corrente")
 
     A_mat = np.array(A_list)
     B_vec = np.array(B_list)
 
-    # --- FASE 3: Resolução (Graus de Liberdade e Mínimos Quadrados) ---
+    # --- FASE 3: Análise de Erros Específicos e Resolução ---
     posto_A = np.linalg.matrix_rank(A_mat)
     
-    # Se o posto for menor que o nº de variáveis, o sistema tem infinitas soluções (faltam dados)
+    # ERRO ESPECÍFICO 1: Faltam Dados
     if posto_A < num_vars:
-        st.warning(f"⚠️ **Faltam dados!** O sistema precisa de mais variáveis amarradas. (Variáveis: {num_vars} | Equações Independentes: {posto_A})")
+        faltam = num_vars - posto_A
+        st.warning(f"⚠️ **Faltam dados! O sistema está sub-especificado.**\n\n"
+                   f"O simulador precisa descobrir **{num_vars} variáveis** (massas individuais), mas os dados que você preencheu só permitiram criar **{posto_A} equações matemáticas independentes**.\n\n"
+                   f"**💡 Dica de Resolução:** Você precisa fornecer mais **{faltam}** informação(ões). Tente informar a Vazão Total de uma corrente ou a Fração (%) de um componente no Topo/Fundo.")
         st.stop()
 
-    # Mínimos Quadrados para resolver sistemas exatos ou sobre-especificados
     X, residuals, rank, singular = np.linalg.lstsq(A_mat, B_vec, rcond=None)
     
-    # Cálculo manual do resíduo (Gap 2 resolvido - Validação Pós-Iteração)
-    erro_balanco = np.sum((np.dot(A_mat, X) - B_vec)**2)
-    if erro_balanco > 1e-4:
-        st.error(f"❌ **Dados Contraditórios.** As informações que você preencheu geram um conflito matemático (Resíduo = {erro_balanco:.5f}). O balanço de massa é impossível de fechar com esses dados exatos.")
+    # ERRO ESPECÍFICO 2: Dados Contraditórios (Resíduo Alto)
+    erros_eq = np.abs(np.dot(A_mat, X) - B_vec)
+    max_erro_idx = np.argmax(erros_eq)
+    
+    if erros_eq[max_erro_idx] > 1e-4:
+        eq_falha = descricoes_equacoes[max_erro_idx]
+        st.error(f"❌ **Dados Contraditórios.** As informações que você preencheu brigam entre si matematicamente.\n\n"
+                 f"**📍 Onde a matemática quebrou:** `{eq_falha}`\n\n"
+                 f"O sistema tentou calcular, mas foi impossível fechar essa equação com os dados exatos fornecidos nas outras correntes. Verifique se você não digitou um valor conflitante.")
         st.stop()
 
-    # Gap 3 resolvido: Bloqueia a geração de matéria ou fluxos negativos
+    # ERRO ESPECÍFICO 3: Massa Negativa
     if np.any(X < -1e-4):
-        st.error("❌ **Erro Físico:** O cálculo resultou em massas negativas. Verifique se os dados inseridos são fisicamente possíveis.")
+        indices_negativos = np.where(X < -1e-4)[0]
+        vars_negativas = [nomes_variaveis[i] for i in indices_negativos]
+        st.error(f"❌ **Erro Físico (Massas Negativas):** O cálculo matemático foi forçado a 'sugar' massa para tentar equilibrar a coluna.\n\n"
+                 f"**📍 O problema ocorreu em:** `{', '.join(vars_negativas)}`\n\n"
+                 f"Isso geralmente acontece quando você exige que saia no Topo/Fundo uma quantidade de matéria MAIOR do que a que realmente entrou na coluna. Revise os fluxos.")
         st.stop()
 
-    # --- FASE 4: Reconstrução e Exibição (Gap 5 resolvido) ---
+    # --- FASE 4: Reconstrução e Passo a Passo (Módulo Educacional) ---
     tabela_final = pd.DataFrame(index=correntes_todas, columns=hierarquia_colunas)
     
     for s, corr in enumerate(correntes_todas):
-        # Extrai as massas calculadas (sem arredondar)
         massas_corrente = X[s * num_componentes : (s+1) * num_componentes]
         vazao_total = np.sum(massas_corrente)
-        
         tabela_final.loc[corr, ("Geral", "Vazão Total")] = vazao_total
         
         for c, comp in enumerate(nomes_comp):
@@ -211,8 +221,26 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
 
     st.success("✅ Sistema resolvido com sucesso via Álgebra Linear!")
 
+    # Expandir com o racional matemático
+    st.subheader("🧠 Passo a Passo da Modelagem Matemática")
+    with st.expander("Ver Lógica de Resolução e Equações do Sistema", expanded=False):
+        st.markdown("Ao invés de procurar as respostas tentando adivinhar uma lacuna por vez, problemas de engenharia são resolvidos montando um **Sistema de Equações Simultâneas** formulado como uma matriz genérica $A \cdot x = B$. Veja como o simulador 'pensou':")
+        
+        st.markdown(f"**1º Passo: Mapear as {num_vars} Incógnitas (Vetor $x$)**")
+        st.markdown("O simulador ignorou as frações temporariamente e buscou descobrir apenas as **massas absolutas** de cada componente em cada lugar:")
+        for var in nomes_variaveis:
+            st.markdown(f"- $x_{{{nomes_variaveis.index(var)}}}$ = {var}")
+            
+        st.markdown("<br>**2º Passo: Formular as Equações baseadas nos seus Inputs**", unsafe_allow_html=True)
+        st.markdown("O algoritmo leu o que você digitou e transformou em equações lineares:")
+        for i, (desc, val) in enumerate(zip(descricoes_equacoes, B_list)):
+            st.markdown(f"- **Eq {i+1}:** {desc} $\\rightarrow$ Resulta em **{val:.2f}**")
+            
+        st.markdown("<br>**3º Passo: Resolução via Matrizes**", unsafe_allow_html=True)
+        st.markdown("O simulador resolveu a matriz encontrando o valor de cada incógnita $x$ que satisfizesse todas as equações acima ao mesmo tempo. Com as massas absolutas descobertas, as frações percentuais e totais foram calculadas por mera divisão/soma matemática para preencher a tabela abaixo.")
+
+    # Exibição dos resultados
     st.subheader("📋 Tabela Final de Resultados")
-    # Formatação (arredondamento) aplicada APENAS na visualização
     st.dataframe(tabela_final.style.format("{:.4f}"), use_container_width=True)
 
     # ==========================================
