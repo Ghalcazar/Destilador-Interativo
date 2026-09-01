@@ -226,12 +226,25 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     with st.expander("Ver Lógica de Resolução e Equações do Sistema", expanded=False):
         st.markdown("Ao invés de procurar as respostas tentando adivinhar uma lacuna por vez, problemas de engenharia são resolvidos montando um **Sistema de Equações Simultâneas** formulado como uma matriz genérica $A \\cdot x = B$. Veja como o simulador 'pensou':")
         
-        st.markdown(f"**1º Passo: Mapear as {num_vars} Incógnitas (Vetor $x$)**")
+        # NOVO: Bloco explicativo sobre a Matriz
+        st.markdown("<br>**1º Passo: Entendendo a Estrutura $A \\cdot x = B$**", unsafe_allow_html=True)
+        st.info("""
+        * **Vetor $x$ (As Incógnitas):** É a lista com as massas individuais de cada componente que queremos descobrir.
+        * **Vetor $B$ (Os Resultados):** Fica do lado direito da igualdade ($=$). São os valores absolutos conhecidos que você digitou (ex: uma vazão fixada em 100 kg/h) ou 0.00 (quando a equação é um balanço fechado).
+        * **Matriz $A$ (Os Coeficientes):** Fica do lado esquerdo. Representa as proporções e as "regras do jogo". 
+        
+        **Por que existem valores negativos na Matriz $A$?**  
+        Para o computador resolver o sistema, precisamos passar todas as incógnitas (as letras) para o lado esquerdo e os números puros para o lado direito.  
+        * **No Balanço Global:** A lógica "Tudo que Entra = Tudo que Sai" ($E = T + F$) precisa ser reescrita como $E - T - F = 0$. Por isso, as saídas ganham coeficiente negativo.
+        * **Nas Porcentagens:** Se um componente representa 20% do total da sua corrente ($m_A = 0.20 \\cdot (m_A + m_B)$), ao passarmos tudo para a esquerda, a matemática resulta em $0.80m_A - 0.20m_B = 0$. É por isso que os outros componentes aparecem "subtraindo".
+        """)
+
+        st.markdown(f"<br>**2º Passo: Mapear as {num_vars} Incógnitas (Vetor $x$)**", unsafe_allow_html=True)
         st.markdown("O simulador ignorou as frações temporariamente e buscou descobrir apenas as **massas absolutas** de cada componente em cada lugar:")
         for var in nomes_variaveis:
             st.markdown(f"- $x_{{{nomes_variaveis.index(var)}}}$ = {var}")
             
-        st.markdown("<br>**2º Passo: Formular as Equações baseadas nos seus Inputs**", unsafe_allow_html=True)
+        st.markdown("<br>**3º Passo: Formular as Equações baseadas nos seus Inputs**", unsafe_allow_html=True)
         st.markdown("O algoritmo leu o que você digitou e montou o seguinte sistema linear:")
         
         # Gera símbolos curtos e bonitos para o LaTeX (ex: m_{Comp1}^{Entrada})
@@ -258,7 +271,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             st.markdown(f"- **Eq {i+1}:** {desc}")
             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${latex_eq}$")
             
-        st.markdown("<br>**3º Passo: Resolução via Matrizes**", unsafe_allow_html=True)
+        st.markdown("<br>**4º Passo: Resolução via Matrizes**", unsafe_allow_html=True)
         st.markdown("O simulador resolveu a matriz encontrando o valor de cada incógnita $x$ que satisfizesse todas as equações acima ao mesmo tempo. Com as massas absolutas descobertas, as frações percentuais e totais foram calculadas por mera divisão/soma matemática para preencher a tabela abaixo.")
 
     # Exibição dos resultados
