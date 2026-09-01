@@ -226,7 +226,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     with st.expander("Ver Lógica de Resolução e Equações do Sistema", expanded=False):
         st.markdown("Ao invés de procurar as respostas tentando adivinhar uma lacuna por vez, problemas de engenharia são resolvidos montando um **Sistema de Equações Simultâneas** formulado como uma matriz genérica $A \\cdot x = B$. Veja como o simulador 'pensou':")
         
-        # NOVO: Bloco explicativo sobre a Matriz
+        # Bloco explicativo sobre a Matriz
         st.markdown("<br>**1º Passo: Entendendo a Estrutura $A \\cdot x = B$**", unsafe_allow_html=True)
         st.info("""
         * **Vetor $x$ (As Incógnitas):** É a lista com as massas individuais de cada componente que queremos descobrir.
@@ -270,9 +270,28 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             
             st.markdown(f"- **Eq {i+1}:** {desc}")
             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${latex_eq}$")
+
+        st.markdown("<br>**4º Passo: A Matriz Final ($A \\cdot x = B$)**", unsafe_allow_html=True)
+        st.markdown("Na álgebra linear, todas as equações que deduzimos acima são empilhadas e organizadas em matrizes. A Matriz **$A$** guarda os coeficientes, o vetor **$x$** guarda as incógnitas que queremos descobrir e o vetor **$B$** guarda os resultados fixos:")
+        
+        # Construindo o formato LaTeX seguro usando raw strings (r"")
+        linhas_A_latex = [ " & ".join([f"{coef:.2f}" for coef in linha]) for linha in A_mat ]
+        latex_A = r"\begin{bmatrix}" + r" \\ ".join(linhas_A_latex) + r"\end{bmatrix}"
+        
+        latex_X = r"\begin{bmatrix}" + r" \\ ".join(simbolos_vars) + r"\end{bmatrix}"
+        latex_B = r"\begin{bmatrix}" + r" \\ ".join([f"{val:.2f}" for val in B_vec]) + r"\end{bmatrix}"
+        
+        # Renderiza a equação matricial completa
+        st.latex(f"{latex_A} \\cdot {latex_X} = {latex_B}")
+        
+        st.markdown("<br>**5º Passo: Isolando as Incógnitas (Vetor $x$)**", unsafe_allow_html=True)
+        st.markdown("O computador resolve o sistema linear (isolando o vetor $x$) e descobre instantaneamente a massa exata de cada componente rodando na sua coluna:")
+        
+        # Exibindo os resultados descobertos para cada incógnita
+        for simb, val in zip(simbolos_vars, X):
+            st.markdown(f"- ${simb} = {val:.2f}$ kg/h")
             
-        st.markdown("<br>**4º Passo: Resolução via Matrizes**", unsafe_allow_html=True)
-        st.markdown("O simulador resolveu a matriz encontrando o valor de cada incógnita $x$ que satisfizesse todas as equações acima ao mesmo tempo. Com as massas absolutas descobertas, as frações percentuais e totais foram calculadas por mera divisão/soma matemática para preencher a tabela abaixo.")
+        st.info("💡 **Conclusão:** Com todas as massas individuais descobertas no Passo 5, o simulador agora só precisa somar as partes para encontrar as Vazões Totais, e dividir as partes pelo todo para encontrar as porcentagens. É assim que a tabela final é preenchida!")
 
     # Exibição dos resultados
     st.subheader("📋 Tabela Final de Resultados")
