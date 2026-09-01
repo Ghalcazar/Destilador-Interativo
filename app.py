@@ -280,6 +280,9 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     # ==========================================
     # 4. MÓDULO EDUCACIONAL HÍBRIDO
     # ==========================================
+# ==========================================
+    # 4. MÓDULO EDUCACIONAL HÍBRIDO
+    # ==========================================
     st.subheader("🧠 Passo a Passo da Resolução")
     with st.expander("Ver Análise Didática: Linha a Linha vs. Matrizes", expanded=False):
         
@@ -300,11 +303,27 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             st.error("🚨 **O Método do Caderno Travou!**")
             st.markdown("O algoritmo chegou em um ponto onde **não havia mais nenhuma variável que pudesse ser isolada sozinha**. Isso ocorre em problemas industriais reais quando temos restrições cruzadas (ex: as incógnitas de Topo e Fundo dependem umas das outras simultaneamente). Para destravar, precisamos de **Modelagem Matricial**.")
 
-            # PARTE 2: ÁLGEBRA LINEAR (Exibida com foco na transição)
+            # PARTE 2: ÁLGEBRA LINEAR (RESTAURADA COM TODA A EXPLICAÇÃO DIDÁTICA)
             st.markdown("---")
             st.markdown("### 2ª Fase: A Transição para Álgebra Linear ($A \\cdot x = B$)")
             st.markdown("Para resolver o que o método passo a passo não conseguiu, o simulador pegou todas as suas restrições e montou um **Sistema de Equações Lineares** completo.")
             
+            st.info("""
+            * **Vetor $x$ (As Incógnitas):** É a lista com as massas individuais de cada componente que queremos descobrir.
+            * **Vetor $B$ (Os Resultados):** Fica do lado direito da igualdade ($=$). São os valores absolutos conhecidos que você digitou (ex: uma vazão fixada em 100 kg/h) ou 0.00 (quando a equação é um balanço fechado).
+            * **Matriz $A$ (Os Coeficientes):** Fica do lado esquerdo. Representa as proporções e as "regras do jogo". 
+            
+            **Por que existem valores negativos na Matriz $A$?**  
+            Para o computador resolver o sistema, precisamos passar todas as incógnitas (as letras) para o lado esquerdo e os números puros para o lado direito.  
+            * **No Balanço Global:** A lógica "Tudo que Entra = Tudo que Sai" ($E = T + F$) precisa ser reescrita como $E - T - F = 0$. Por isso, as saídas ganham coeficiente negativo.
+            * **Nas Porcentagens:** Se um componente representa 20% do total da sua corrente ($m_A = 0.20 \\cdot (m_A + m_B)$), ao passarmos tudo para a esquerda, a matemática resulta em $0.80m_A - 0.20m_B = 0$. É por isso que os outros componentes aparecem "subtraindo".
+            """)
+
+            st.markdown("<br>**Mapeamento das Incógnitas (Vetor $x$)**", unsafe_allow_html=True)
+            for var in nomes_vars:
+                st.markdown(f"- $x_{{{nomes_vars.index(var)}}}$ = {var}")
+
+            st.markdown("<br>**As Equações Formuladas**", unsafe_allow_html=True)
             simbolos_vars = [f"m_{{{comp.replace(' ', '')}}}^{{{corr.split('/')[0].replace(' ', '')}}}" for corr in correntes_todas for comp in nomes_comp]
             
             for i, (desc, linha_A, val_B) in enumerate(zip(descricoes_equacoes, A_list, B_list)):
@@ -323,46 +342,25 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                 latex_eq = " ".join(termos) + f" = {val_B:.2f}"
                 st.markdown(f"**Eq {i+1}** ({desc}):  \n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${latex_eq}$")
 
-            st.info("👀 **Visão Matricial:** Em softwares profissionais, essas equações viram matrizes ($A$ e $B$), e o sistema resolve todas as incógnitas de uma só vez multiplicando pela Matriz Inversa ($x = A^{-1} \\cdot B$).")
+            st.markdown("<br>**A Matriz Final ($A \\cdot x = B$)**", unsafe_allow_html=True)
+            st.info("👀 **Dica de Leitura:** Cada **coluna** da Matriz $A$ está perfeitamente alinhada com as incógnitas. A 1ª coluna (da esquerda para a direita) contém os coeficientes da 1ª variável do vetor $x$, a 2ª coluna pertence à 2ª variável, e assim por diante.")
+            
+            linhas_A_latex = [ " & ".join([f"{coef:.2f}" for coef in linha]) for linha in A_mat ]
+            latex_A = r"\begin{bmatrix}" + r" \\ ".join(linhas_A_latex) + r"\end{bmatrix}"
+            latex_X = r"\begin{bmatrix}" + r" \\ ".join(simbolos_vars) + r"\end{bmatrix}"
+            latex_B = r"\begin{bmatrix}" + r" \\ ".join([f"{val:.2f}" for val in B_vec]) + r"\end{bmatrix}"
+            
+            st.latex(f"{latex_A} \\cdot {latex_X} = {latex_B}")
+
+            st.markdown("<br>**Isolando as Incógnitas ($x = A^{-1} \\cdot B$)**", unsafe_allow_html=True)
+            st.markdown("Para descobrir o valor exato das variáveis, isolamos o vetor $x$ multiplicando ambos os lados da equação pela **Matriz Inversa** de $A$ ($A^{-1}$).")
             
             A_inv = np.linalg.pinv(A_mat)
-            latex_X = r"\begin{bmatrix}" + r" \\ ".join(simbolos_vars) + r"\end{bmatrix}"
             linhas_Ainv_latex = [ " & ".join([f"{coef:.2f}" for coef in linha]) for linha in A_inv ]
             latex_Ainv = r"\begin{bmatrix}" + r" \\ ".join(linhas_Ainv_latex) + r"\end{bmatrix}"
-            latex_B = r"\begin{bmatrix}" + r" \\ ".join([f"{val:.2f}" for val in B_vec]) + r"\end{bmatrix}"
             
             st.latex(f"{latex_X} = {latex_Ainv} \\cdot {latex_B}")
 
-    # ==========================================
-    # 5. RESULTADOS E DIAGRAMA
-    # ==========================================
-    st.subheader("📋 Tabela Final de Resultados")
-    st.dataframe(tabela_final.style.format("{:.4f}"), use_container_width=True)
-
-    st.markdown("---")
-    st.subheader("🗼 Esboço Final da Coluna com Composições")
-    
-    diagrama = graphviz.Digraph(engine="dot")
-    diagrama.attr(rankdir='LR', splines='ortho', nodesep='1.0')
-    diagrama.node('Coluna', 'Torre de\nDestilação', shape='cylinder', style='filled', fillcolor='#add8e6', width='1.5', height='1.5')
-    
-    def montar_label_corrente(nome_corrente):
-        v_tot = tabela_final.loc[nome_corrente, ("Geral", "Vazão Total")]
-        texto = f"{nome_corrente}\nTotal: {v_tot:.2f} kg/h\n"
-        for comp in nomes_comp:
-            v_c = tabela_final.loc[nome_corrente, (comp, "Vazão")]
-            p_c = tabela_final.loc[nome_corrente, (comp, "%")]
-            texto += f"- {comp}: {v_c:.2f} kg/h ({p_c * 100:.2f}%)\n"
-        return texto
-
-    lbl_ent = montar_label_corrente("Entrada")
-    diagrama.node('Entrada_Node', 'Entrada', shape='ellipse')
-    diagrama.edge('Entrada_Node', 'Coluna', label=lbl_ent)
-    
-    for corr in correntes_saida:
-        lbl_sai = montar_label_corrente(corr)
-        node_id = f"Node_{corr}"
-        diagrama.node(node_id, corr, shape='ellipse')
-        diagrama.edge('Coluna', node_id, label=lbl_sai)
-        
-    st.graphviz_chart(diagrama, use_container_width=True)
+            st.markdown("Realizando a multiplicação dessas duas matrizes, a álgebra linear nos devolve imediatamente a resposta de todo o sistema:")
+            for simb, val in zip(simbolos_vars, X):
+                st.markdown(f"- ${simb} = {val:.2f}$ kg/h")
