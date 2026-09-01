@@ -280,9 +280,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     # ==========================================
     # 4. MÓDULO EDUCACIONAL HÍBRIDO
     # ==========================================
-# ==========================================
-    # 4. MÓDULO EDUCACIONAL HÍBRIDO
-    # ==========================================
     st.subheader("🧠 Passo a Passo da Resolução")
     with st.expander("Ver Análise Didática: Linha a Linha vs. Matrizes", expanded=False):
         
@@ -364,3 +361,37 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             st.markdown("Realizando a multiplicação dessas duas matrizes, a álgebra linear nos devolve imediatamente a resposta de todo o sistema:")
             for simb, val in zip(simbolos_vars, X):
                 st.markdown(f"- ${simb} = {val:.2f}$ kg/h")
+
+    # ==========================================
+    # 5. RESULTADOS E DIAGRAMA
+    # ==========================================
+    st.subheader("📋 Tabela Final de Resultados")
+    st.dataframe(tabela_final.style.format("{:.4f}"), use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("🗼 Esboço Final da Coluna com Composições")
+    
+    diagrama = graphviz.Digraph(engine="dot")
+    diagrama.attr(rankdir='LR', splines='ortho', nodesep='1.0')
+    diagrama.node('Coluna', 'Torre de\nDestilação', shape='cylinder', style='filled', fillcolor='#add8e6', width='1.5', height='1.5')
+    
+    def montar_label_corrente(nome_corrente):
+        v_tot = tabela_final.loc[nome_corrente, ("Geral", "Vazão Total")]
+        texto = f"{nome_corrente}\nTotal: {v_tot:.2f} kg/h\n"
+        for comp in nomes_comp:
+            v_c = tabela_final.loc[nome_corrente, (comp, "Vazão")]
+            p_c = tabela_final.loc[nome_corrente, (comp, "%")]
+            texto += f"- {comp}: {v_c:.2f} kg/h ({p_c * 100:.2f}%)\n"
+        return texto
+
+    lbl_ent = montar_label_corrente("Entrada")
+    diagrama.node('Entrada_Node', 'Entrada', shape='ellipse')
+    diagrama.edge('Entrada_Node', 'Coluna', label=lbl_ent)
+    
+    for corr in correntes_saida:
+        lbl_sai = montar_label_corrente(corr)
+        node_id = f"Node_{corr}"
+        diagrama.node(node_id, corr, shape='ellipse')
+        diagrama.edge('Coluna', node_id, label=lbl_sai)
+        
+    st.graphviz_chart(diagrama, use_container_width=True)
