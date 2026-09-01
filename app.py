@@ -131,7 +131,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             sucesso_iterativo = True
             break
             
-        # 1A: Descobrir total pela linha (Regra de 3)
         for corr in correntes_todas:
             if pd.isna(tabela_iter.loc[corr, ("Geral", "Vazão Total")]):
                 for comp in nomes_comp:
@@ -142,7 +141,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                         logs_iterativos.append(f"🔹 **Vazão Total ({corr}):** Calculada via regra de 3 ({v_c:.2f} / {p_c:.2f}) = {(v_c/p_c):.2f}")
                         break
 
-        # 1B: Descobrir total pelo balanço global
         v_tot_entrada = tabela_iter.loc["Entrada", ("Geral", "Vazão Total")]
         v_totais_saidas = tabela_iter.loc[correntes_saida, ("Geral", "Vazão Total")]
         if pd.isna(v_tot_entrada) and v_totais_saidas.notna().all():
@@ -154,17 +152,14 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             tabela_iter.loc[saida_faltante, ("Geral", "Vazão Total")] = v_tot_entrada - soma_conhecidas
             logs_iterativos.append(f"🔹 **Total em {saida_faltante}:** Calculado por diferença (Entrada - Outras Saídas) = {(v_tot_entrada - soma_conhecidas):.2f}")
 
-        # 2: Cálculos internos na corrente
         for corr in correntes_todas:
             v_total = tabela_iter.loc[corr, ("Geral", "Vazão Total")]
-            # Fechamento de %
             falt_perc = [c for c in nomes_comp if pd.isna(tabela_iter.loc[corr, (c, "%")])]
             if len(falt_perc) == 1:
                 soma_p = sum([tabela_iter.loc[corr, (c, "%")] for c in nomes_comp if pd.notna(tabela_iter.loc[corr, (c, "%")])])
                 tabela_iter.loc[corr, (falt_perc[0], "%")] = 1.0 - soma_p
                 logs_iterativos.append(f"🔸 **% {falt_perc[0]} ({corr}):** Fechamento de 100% = {(1.0 - soma_p)*100:.2f}%")
             
-            # Cruzamento Total x %
             for comp in nomes_comp:
                 v_c = tabela_iter.loc[corr, (comp, "Vazão")]
                 p_c = tabela_iter.loc[corr, (comp, "%")]
@@ -176,7 +171,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                         tabela_iter.loc[corr, (comp, "%")] = v_c / v_total
                         logs_iterativos.append(f"🔸 **% {comp} ({corr}):** Fração mássica ({v_c:.2f} / {v_total:.2f}) = {(v_c/v_total)*100:.2f}%")
             
-            # Fechamento de Massa Interna
             if pd.notna(v_total):
                 falt_vaz = [c for c in nomes_comp if pd.isna(tabela_iter.loc[corr, (c, "Vazão")])]
                 if len(falt_vaz) == 1:
@@ -184,7 +178,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                     tabela_iter.loc[corr, (falt_vaz[0], "Vazão")] = v_total - soma_v
                     logs_iterativos.append(f"🔸 **Vazão {falt_vaz[0]} ({corr}):** Diferença de massa = {(v_total - soma_v):.2f}")
 
-        # 3: Balanço de Componente
         for comp in nomes_comp:
             v_ent = tabela_iter.loc["Entrada", (comp, "Vazão")]
             v_sais = tabela_iter.loc[correntes_saida, (comp, "Vazão")]
@@ -198,74 +191,88 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
 
         nans_depois = tabela_iter.isna().sum().sum()
         if nans_antes == nans_depois:
-            break # Travou! Não consegue mais iterar
+            break
 
     # --- FASE 3: A MATRIZ DE SEGURANÇA (O CÉREBRO MÁQUINA) ---
     num_vars = num_total_correntes * num_componentes
     nomes_vars = [f"Massa de {comp} em {corr}" for corr in correntes_todas for comp in nomes_comp]
     
-    A_list = []
-    B_list = []
-    descricoes_equacoes = []
+    A_todas = []
+    B_todas = []
+    desc_todas = []
 
     for c, comp in enumerate(nomes_comp):
         eq = np.zeros(num_vars)
-        eq[c] = 1.0 
+        eq[0 * num_componentes + c] = 1.0 
         for s in range(1, num_total_correntes):
             eq[s * num_componentes + c] = -1.0 
-        A_list.append(eq)
-        B_list.append(0.0)
-        descricoes_equacoes.append(f"Conservação de '{comp}'")
+        A_todas.append(eq)
+        B_todas.append(0.0)
+        desc_todas.append(f"Conservação de '{comp}' (Entrada = Saídas)")
 
     for s, corr in enumerate(correntes_todas):
-        v_tot = dados_entrada.get(f"{corr}_VazaoTotal")
-        if v_tot is not None:
+        v_tot = tabela_iter.loc[corr, ("Geral", "Vazão Total")]
+        if pd.notna(v_tot):
             eq = np.zeros(num_vars)
             for c in range(num_componentes): eq[s * num_componentes + c] = 1.0
-            A_list.append(eq)
-            B_list.append(v_tot)
-            descricoes_equacoes.append(f"Vazão Total em '{corr}' = {v_tot}")
+            A_todas.append(eq)
+            B_todas.append(v_tot)
+            desc_todas.append(f"Vazão Total em '{corr}' fixada em {v_tot:.2f}")
 
         for c, comp in enumerate(nomes_comp):
-            v_comp = dados_entrada.get(f"{corr}_{comp}_Vazao")
-            if v_comp is not None:
+            v_comp = tabela_iter.loc[corr, (comp, "Vazão")]
+            if pd.notna(v_comp):
                 eq = np.zeros(num_vars)
                 eq[s * num_componentes + c] = 1.0
-                A_list.append(eq)
-                B_list.append(v_comp)
-                descricoes_equacoes.append(f"Vazão de '{comp}' em '{corr}' = {v_comp}")
+                A_todas.append(eq)
+                B_todas.append(v_comp)
+                desc_todas.append(f"Vazão exata de '{comp}' em '{corr}' já calculada como {v_comp:.2f}")
 
-            p_comp = dados_entrada.get(f"{corr}_{comp}_Perc")
-            if p_comp is not None:
+            p_comp = tabela_iter.loc[corr, (comp, "%")]
+            if pd.notna(p_comp):
                 eq = np.zeros(num_vars)
                 for k in range(num_componentes):
                     if k == c: eq[s * num_componentes + k] = 1.0 - p_comp
                     else: eq[s * num_componentes + k] = -p_comp
-                A_list.append(eq)
-                B_list.append(0.0)
-                descricoes_equacoes.append(f"Porcentagem de '{comp}' em '{corr}' = {p_comp*100}%")
+                A_todas.append(eq)
+                B_todas.append(0.0)
+                desc_todas.append(f"Proporção de '{comp}' em '{corr}' amarrada em {p_comp*100:.2f}%")
+
+    posto_geral = np.linalg.matrix_rank(np.array(A_todas))
+    if posto_geral < num_vars:
+        faltam = num_vars - posto_geral
+        st.warning(f"⚠️ **Faltam dados! O sistema está sub-especificado.** O simulador precisa de {num_vars} variáveis independentes, mas os dados só renderam {posto_geral} equações. Forneça mais {faltam} informação(ões).")
+        st.stop()
+
+    A_list = []
+    B_list = []
+    descricoes_equacoes = []
+    
+    for eq, b_val, desc in zip(A_todas, B_todas, desc_todas):
+        temp_A = A_list + [eq]
+        if np.linalg.matrix_rank(np.array(temp_A)) == len(temp_A):
+            A_list.append(eq)
+            B_list.append(b_val)
+            descricoes_equacoes.append(desc)
+        if len(A_list) == num_vars:
+            break
 
     A_mat = np.array(A_list)
     B_vec = np.array(B_list)
 
-    posto_A = np.linalg.matrix_rank(A_mat)
-    if posto_A < num_vars:
-        st.warning(f"⚠️ **Faltam dados! O sistema está sub-especificado.** O simulador precisa de {num_vars} variáveis, mas você forneceu dados para formar apenas {posto_A} equações.")
-        st.stop()
-
-    X, res, rank, sing = np.linalg.lstsq(A_mat, B_vec, rcond=None)
+    X = np.linalg.solve(A_mat, B_vec)
     
-    # Checagens rigorosas da máquina
-    erros_eq = np.abs(np.dot(A_mat, X) - B_vec)
-    if erros_eq[np.argmax(erros_eq)] > 1e-4:
-        st.error("❌ **Dados Contraditórios.** A lei de conservação de massas não fecha matematicamente com os dados fornecidos.")
+    erros_eq = np.abs(np.dot(np.array(A_todas), X) - np.array(B_todas))
+    if np.max(erros_eq) > 1e-4:
+        st.error("❌ **Dados Contraditórios.** As informações fornecidas violam a lei de conservação de massas. Revise os dados de entrada.")
         st.stop()
 
     if np.any(X < -1e-4):
-        st.error("❌ **Erro Físico (Massas Negativas):** Os dados inseridos exigem geração espontânea de massa, o que viola a termodinâmica.")
+        indices_negativos = np.where(X < -1e-4)[0]
+        vars_negativas = [nomes_vars[i] for i in indices_negativos]
+        st.error(f"❌ **Erro Físico (Massas Negativas):** O cálculo matemático foi forçado a 'sugar' massa para tentar equilibrar a coluna.\n\n📍 **O problema ocorreu em:** `{', '.join(vars_negativas)}`\n\nIsso geralmente acontece quando você exige que saia uma quantidade de matéria MAIOR do que a que entrou. Revise os fluxos.")
         st.stop()
 
-    # Tabela Final gerada pela Matriz (imune a erros de arredondamento)
     tabela_final = pd.DataFrame(index=correntes_todas, columns=hierarquia_colunas)
     for s, corr in enumerate(correntes_todas):
         massas = X[s * num_componentes : (s+1) * num_componentes]
@@ -275,7 +282,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             tabela_final.loc[corr, (comp, "Vazão")] = massas[c]
             tabela_final.loc[corr, (comp, "%")] = massas[c] / v_tot if v_tot > 1e-8 else 0.0
 
-    st.success("✅ Balanço resolvido com sucesso!")
+    st.success("✅ Sistema solucionado com sucesso!")
 
     # ==========================================
     # 4. MÓDULO EDUCACIONAL HÍBRIDO
@@ -283,44 +290,37 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     st.subheader("🧠 Passo a Passo da Resolução")
     with st.expander("Ver Análise Didática: Linha a Linha vs. Matrizes", expanded=False):
         
-        # PARTE 1: TENTATIVA HUMANA
         st.markdown("### 1ª Fase: O Método do Caderno (Passo a Passo Sequencial)")
-        st.markdown("Primeiro, o simulador tentou resolver o problema da forma como faríamos no papel: isolando uma variável por vez usando regras de 3 e subtrações simples.")
+        st.markdown("Primeiro, o simulador tentou resolver o problema isolando uma variável por vez, usando regras de 3 e subtrações simples (o que você faria no papel):")
         
         if logs_iterativos:
-            for log in logs_iterativos:
-                st.markdown(log)
+            for log in logs_iterativos: st.markdown(log)
         else:
-            st.markdown("*Nenhum cálculo sequencial pôde ser iniciado com os dados fornecidos.*")
+            st.markdown("*Nenhuma dedução sequencial pôde ser iniciada com os dados crus.*")
 
-        # TRANSIÇÃO PEDAGÓGICA
         if sucesso_iterativo:
-            st.success("🎉 **Sucesso Sequencial!** Este problema tinha amarrações diretas o suficiente para ser resolvido inteiramente linha a linha, sem precisar de sistemas complexos.")
+            st.success("🎉 **Sucesso Sequencial!** O problema tinha amarrações diretas o suficiente para ser resolvido inteiramente linha a linha.")
         else:
             st.error("🚨 **O Método do Caderno Travou!**")
-            st.markdown("O algoritmo chegou em um ponto onde **não havia mais nenhuma variável que pudesse ser isolada sozinha**. Isso ocorre em problemas industriais reais quando temos restrições cruzadas (ex: as incógnitas de Topo e Fundo dependem umas das outras simultaneamente). Para destravar, precisamos de **Modelagem Matricial**.")
+            st.markdown("O algoritmo chegou em um ponto onde não havia mais nenhuma variável que pudesse ser isolada sozinha. Para destravar os cruzamentos simultâneos (ex: Topo e Fundo dependendo um do outro), precisamos da **Álgebra Linear**.")
 
-            # PARTE 2: ÁLGEBRA LINEAR (RESTAURADA COM TODA A EXPLICAÇÃO DIDÁTICA)
             st.markdown("---")
             st.markdown("### 2ª Fase: A Transição para Álgebra Linear ($A \\cdot x = B$)")
-            st.markdown("Para resolver o que o método passo a passo não conseguiu, o simulador pegou todas as suas restrições e montou um **Sistema de Equações Lineares** completo.")
+            st.markdown("O simulador pegou tudo o que você preencheu + **o que ele já havia descoberto na 1ª Fase** e montou um sistema de equações focado apenas no que faltava descobrir.")
             
             st.info("""
-            * **Vetor $x$ (As Incógnitas):** É a lista com as massas individuais de cada componente que queremos descobrir.
-            * **Vetor $B$ (Os Resultados):** Fica do lado direito da igualdade ($=$). São os valores absolutos conhecidos que você digitou (ex: uma vazão fixada em 100 kg/h) ou 0.00 (quando a equação é um balanço fechado).
-            * **Matriz $A$ (Os Coeficientes):** Fica do lado esquerdo. Representa as proporções e as "regras do jogo". 
+            * **Vetor $x$ (As Incógnitas):** A lista com as massas individuais que compõem o sistema.
+            * **Vetor $B$ (Os Resultados):** Fica do lado direito da igualdade ($=$). São os valores conhecidos (ex: 50.00).
+            * **Matriz $A$ (Os Coeficientes):** Fica do lado esquerdo. Mostra as proporções de cada equação. 
             
-            **Por que existem valores negativos na Matriz $A$?**  
-            Para o computador resolver o sistema, precisamos passar todas as incógnitas (as letras) para o lado esquerdo e os números puros para o lado direito.  
-            * **No Balanço Global:** A lógica "Tudo que Entra = Tudo que Sai" ($E = T + F$) precisa ser reescrita como $E - T - F = 0$. Por isso, as saídas ganham coeficiente negativo.
-            * **Nas Porcentagens:** Se um componente representa 20% do total da sua corrente ($m_A = 0.20 \\cdot (m_A + m_B)$), ao passarmos tudo para a esquerda, a matemática resulta em $0.80m_A - 0.20m_B = 0$. É por isso que os outros componentes aparecem "subtraindo".
+            **A Estratégia da Matriz Quadrada:** O software descartou equações redundantes e separou exatamente o número de equações necessárias para criar uma matriz quadrada perfeita, permitindo o cálculo clássico de inversão.
             """)
 
             st.markdown("<br>**Mapeamento das Incógnitas (Vetor $x$)**", unsafe_allow_html=True)
             for var in nomes_vars:
                 st.markdown(f"- $x_{{{nomes_vars.index(var)}}}$ = {var}")
 
-            st.markdown("<br>**As Equações Formuladas**", unsafe_allow_html=True)
+            st.markdown("<br>**As Equações Essenciais Filtradas**", unsafe_allow_html=True)
             simbolos_vars = [f"m_{{{comp.replace(' ', '')}}}^{{{corr.split('/')[0].replace(' ', '')}}}" for corr in correntes_todas for comp in nomes_comp]
             
             for i, (desc, linha_A, val_B) in enumerate(zip(descricoes_equacoes, A_list, B_list)):
@@ -339,26 +339,31 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                 latex_eq = " ".join(termos) + f" = {val_B:.2f}"
                 st.markdown(f"**Eq {i+1}** ({desc}):  \n&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${latex_eq}$")
 
-            st.markdown("<br>**A Matriz Final ($A \\cdot x = B$)**", unsafe_allow_html=True)
-            st.info("👀 **Dica de Leitura:** Cada **coluna** da Matriz $A$ está perfeitamente alinhada com as incógnitas. A 1ª coluna (da esquerda para a direita) contém os coeficientes da 1ª variável do vetor $x$, a 2ª coluna pertence à 2ª variável, e assim por diante.")
+            st.markdown("<br>**A Matriz Final Quadrada ($A \\cdot x = B$)**", unsafe_allow_html=True)
+            st.info("👀 **Dica de Leitura:** Cada **coluna** da Matriz $A$ está perfeitamente alinhada com as incógnitas. A 1ª coluna contém os coeficientes da 1ª variável do vetor $x$, a 2ª coluna da 2ª, etc.")
             
-            linhas_A_latex = [ " & ".join([f"{coef:.2f}" for coef in linha]) for linha in A_mat ]
+            def formata_zero(val, casas=2):
+                val_rnd = round(val, casas)
+                if val_rnd == 0: return "0.00" if casas == 2 else "0.0000"
+                return f"{val_rnd:.{casas}f}"
+
+            linhas_A_latex = [ " & ".join([formata_zero(coef, 2) for coef in linha]) for linha in A_mat ]
             latex_A = r"\begin{bmatrix}" + r" \\ ".join(linhas_A_latex) + r"\end{bmatrix}"
             latex_X = r"\begin{bmatrix}" + r" \\ ".join(simbolos_vars) + r"\end{bmatrix}"
-            latex_B = r"\begin{bmatrix}" + r" \\ ".join([f"{val:.2f}" for val in B_vec]) + r"\end{bmatrix}"
+            latex_B = r"\begin{bmatrix}" + r" \\ ".join([formata_zero(val, 2) for val in B_vec]) + r"\end{bmatrix}"
             
             st.latex(f"{latex_A} \\cdot {latex_X} = {latex_B}")
 
             st.markdown("<br>**Isolando as Incógnitas ($x = A^{-1} \\cdot B$)**", unsafe_allow_html=True)
-            st.markdown("Para descobrir o valor exato das variáveis, isolamos o vetor $x$ multiplicando ambos os lados da equação pela **Matriz Inversa** de $A$ ($A^{-1}$).")
+            st.markdown("Para descobrir o valor exato, isolamos o vetor $x$ multiplicando ambos os lados pela **Matriz Inversa** de $A$ ($A^{-1}$).")
             
-            A_inv = np.linalg.pinv(A_mat)
-            linhas_Ainv_latex = [ " & ".join([f"{coef:.2f}" for coef in linha]) for linha in A_inv ]
+            A_inv = np.linalg.inv(A_mat) 
+            linhas_Ainv_latex = [ " & ".join([formata_zero(coef, 4) for coef in linha]) for linha in A_inv ]
             latex_Ainv = r"\begin{bmatrix}" + r" \\ ".join(linhas_Ainv_latex) + r"\end{bmatrix}"
             
             st.latex(f"{latex_X} = {latex_Ainv} \\cdot {latex_B}")
 
-            st.markdown("Realizando a multiplicação dessas duas matrizes (linhas de $A^{-1}$ multiplicadas pela coluna de B), a álgebra linear nos devolve imediatamente a resposta de todo o sistema:")
+            st.markdown("Ao efetuar esta última multiplicação, as incógnitas são reveladas, concluindo a modelagem:")
             for simb, val in zip(simbolos_vars, X):
                 st.markdown(f"- ${simb} = {val:.2f}$ kg/h")
 
