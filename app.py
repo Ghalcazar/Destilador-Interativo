@@ -124,9 +124,8 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     
     A_list = []
     B_list = []
-    descricoes_equacoes = [] # Guarda o significado físico de cada equação
+    descricoes_equacoes = []
 
-    # 1. Equações de Balanço Global por Componente
     for c, comp in enumerate(nomes_comp):
         eq = np.zeros(num_vars)
         eq[0 * num_componentes + c] = 1.0 
@@ -136,7 +135,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
         B_list.append(0.0)
         descricoes_equacoes.append(f"Conservação do componente '{comp}' (Entrada = Todas as Saídas)")
 
-    # 2. Equações baseadas nos inputs do usuário
     for s, corr in enumerate(correntes_todas):
         v_tot = dados_entrada.get(f"{corr}_VazaoTotal")
         if v_tot is not None:
@@ -174,7 +172,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     # --- FASE 3: Análise de Erros Específicos e Resolução ---
     posto_A = np.linalg.matrix_rank(A_mat)
     
-    # ERRO ESPECÍFICO 1: Faltam Dados
     if posto_A < num_vars:
         faltam = num_vars - posto_A
         st.warning(f"⚠️ **Faltam dados! O sistema está sub-especificado.**\n\n"
@@ -184,7 +181,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
 
     X, residuals, rank, singular = np.linalg.lstsq(A_mat, B_vec, rcond=None)
     
-    # ERRO ESPECÍFICO 2: Dados Contraditórios (Resíduo Alto)
     erros_eq = np.abs(np.dot(A_mat, X) - B_vec)
     max_erro_idx = np.argmax(erros_eq)
     
@@ -195,7 +191,6 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                  f"O sistema tentou calcular, mas foi impossível fechar essa equação com os dados exatos fornecidos nas outras correntes. Verifique se você não digitou um valor conflitante.")
         st.stop()
 
-    # ERRO ESPECÍFICO 3: Massa Negativa
     if np.any(X < -1e-4):
         indices_negativos = np.where(X < -1e-4)[0]
         vars_negativas = [nomes_variaveis[i] for i in indices_negativos]
@@ -221,12 +216,10 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
 
     st.success("✅ Sistema resolvido com sucesso via Álgebra Linear!")
 
-    # Expandir com o racional matemático
     st.subheader("🧠 Passo a Passo da Modelagem Matemática")
     with st.expander("Ver Lógica de Resolução e Equações do Sistema", expanded=False):
         st.markdown("Ao invés de procurar as respostas tentando adivinhar uma lacuna por vez, problemas de engenharia são resolvidos montando um **Sistema de Equações Simultâneas** formulado como uma matriz genérica $A \\cdot x = B$. Veja como o simulador 'pensou':")
         
-        # Bloco explicativo sobre a Matriz
         st.markdown("<br>**1º Passo: Entendendo a Estrutura $A \\cdot x = B$**", unsafe_allow_html=True)
         st.info("""
         * **Vetor $x$ (As Incógnitas):** É a lista com as massas individuais de cada componente que queremos descobrir.
@@ -247,13 +240,12 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
         st.markdown("<br>**3º Passo: Formular as Equações baseadas nos seus Inputs**", unsafe_allow_html=True)
         st.markdown("O algoritmo leu o que você digitou e montou o seguinte sistema linear:")
         
-        # Gera símbolos curtos e bonitos para o LaTeX (ex: m_{Comp1}^{Entrada})
         simbolos_vars = [f"m_{{{comp.replace(' ', '')}}}^{{{corr.split('/')[0].replace(' ', '')}}}" for corr in correntes_todas for comp in nomes_comp]
         
         for i, (desc, linha_A, val_B) in enumerate(zip(descricoes_equacoes, A_list, B_list)):
             termos = []
             for coef, simb in zip(linha_A, simbolos_vars):
-                if abs(coef) > 1e-5: # Ignora variáveis que não participam desta equação
+                if abs(coef) > 1e-5:
                     if coef == 1.0 and not termos: termos.append(f"{simb}")
                     elif coef == 1.0: termos.append(f"+ {simb}")
                     elif coef == -1.0 and not termos: termos.append(f"-{simb}")
@@ -265,33 +257,40 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                         else: 
                             termos.append(f"{sinal} {abs(coef):.2f}{simb}")
             
-            # Monta a equação final
             latex_eq = " ".join(termos) + f" = {val_B:.2f}"
-            
             st.markdown(f"- **Eq {i+1}:** {desc}")
             st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${latex_eq}$")
 
         st.markdown("<br>**4º Passo: A Matriz Final ($A \\cdot x = B$)**", unsafe_allow_html=True)
         st.markdown("Na álgebra linear, todas as equações que deduzimos acima são empilhadas e organizadas em matrizes. A Matriz **$A$** guarda os coeficientes, o vetor **$x$** guarda as incógnitas que queremos descobrir e o vetor **$B$** guarda os resultados fixos:")
         
-        # Construindo o formato LaTeX seguro usando raw strings (r"")
+        # Adição da explicação visual das colunas de A
+        st.info("👀 **Dica de Leitura:** Cada **coluna** da Matriz $A$ está perfeitamente alinhada com as incógnitas. A 1ª coluna (da esquerda para a direita) contém os coeficientes da 1ª variável do vetor $x$, a 2ª coluna pertence à 2ª variável, e assim por diante.")
+
         linhas_A_latex = [ " & ".join([f"{coef:.2f}" for coef in linha]) for linha in A_mat ]
         latex_A = r"\begin{bmatrix}" + r" \\ ".join(linhas_A_latex) + r"\end{bmatrix}"
         
         latex_X = r"\begin{bmatrix}" + r" \\ ".join(simbolos_vars) + r"\end{bmatrix}"
         latex_B = r"\begin{bmatrix}" + r" \\ ".join([f"{val:.2f}" for val in B_vec]) + r"\end{bmatrix}"
         
-        # Renderiza a equação matricial completa
         st.latex(f"{latex_A} \\cdot {latex_X} = {latex_B}")
         
-        st.markdown("<br>**5º Passo: Isolando as Incógnitas (Vetor $x$)**", unsafe_allow_html=True)
-        st.markdown("O computador resolve o sistema linear (isolando o vetor $x$) e descobre instantaneamente a massa exata de cada componente rodando na sua coluna:")
+        # Novo Passo 5 demonstrando a matemática da inversão
+        st.markdown("<br>**5º Passo: Isolando as Incógnitas ($x = A^{-1} \\cdot B$)**", unsafe_allow_html=True)
+        st.markdown("Para descobrir o valor exato das variáveis, não podemos simplesmente 'passar dividindo'. Na matemática de matrizes, isolamos o vetor $x$ multiplicando ambos os lados da equação pela **Matriz Inversa** de $A$ (denotada como $A^{-1}$).")
         
-        # Exibindo os resultados descobertos para cada incógnita
+        # Calcula a matriz pseudo-inversa em Python
+        A_inv = np.linalg.pinv(A_mat) 
+        linhas_Ainv_latex = [ " & ".join([f"{coef:.2f}" for coef in linha]) for linha in A_inv ]
+        latex_Ainv = r"\begin{bmatrix}" + r" \\ ".join(linhas_Ainv_latex) + r"\end{bmatrix}"
+        
+        st.latex(f"x = A^{{-1}} \\cdot B")
+        st.latex(f"{latex_X} = {latex_Ainv} \\cdot {latex_B}")
+        
+        st.markdown("Realizando a multiplicação dessas duas matrizes (multiplicando as linhas de $A^{-1}$ pela coluna de $B$), a álgebra linear nos devolve imediatamente a resposta de todo o sistema. Com esses valores descobertos, o simulador preenche a tabela final:")
+
         for simb, val in zip(simbolos_vars, X):
             st.markdown(f"- ${simb} = {val:.2f}$ kg/h")
-            
-        st.info("💡 **Conclusão:** Com todas as massas individuais descobertas no Passo 5, o simulador agora só precisa somar as partes para encontrar as Vazões Totais, e dividir as partes pelo todo para encontrar as porcentagens. É assim que a tabela final é preenchida!")
 
     # Exibição dos resultados
     st.subheader("📋 Tabela Final de Resultados")
