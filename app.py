@@ -224,7 +224,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     # Expandir com o racional matemático
     st.subheader("🧠 Passo a Passo da Modelagem Matemática")
     with st.expander("Ver Lógica de Resolução e Equações do Sistema", expanded=False):
-        st.markdown("Ao invés de procurar as respostas tentando adivinhar uma lacuna por vez, problemas de engenharia são resolvidos montando um **Sistema de Equações Simultâneas** formulado como uma matriz genérica $A \cdot x = B$. Veja como o simulador 'pensou':")
+        st.markdown("Ao invés de procurar as respostas tentando adivinhar uma lacuna por vez, problemas de engenharia são resolvidos montando um **Sistema de Equações Simultâneas** formulado como uma matriz genérica $A \\cdot x = B$. Veja como o simulador 'pensou':")
         
         st.markdown(f"**1º Passo: Mapear as {num_vars} Incógnitas (Vetor $x$)**")
         st.markdown("O simulador ignorou as frações temporariamente e buscou descobrir apenas as **massas absolutas** de cada componente em cada lugar:")
@@ -232,9 +232,31 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             st.markdown(f"- $x_{{{nomes_variaveis.index(var)}}}$ = {var}")
             
         st.markdown("<br>**2º Passo: Formular as Equações baseadas nos seus Inputs**", unsafe_allow_html=True)
-        st.markdown("O algoritmo leu o que você digitou e transformou em equações lineares:")
-        for i, (desc, val) in enumerate(zip(descricoes_equacoes, B_list)):
-            st.markdown(f"- **Eq {i+1}:** {desc} $\\rightarrow$ Resulta em **{val:.2f}**")
+        st.markdown("O algoritmo leu o que você digitou e montou o seguinte sistema linear:")
+        
+        # Gera símbolos curtos e bonitos para o LaTeX (ex: m_{Comp1}^{Entrada})
+        simbolos_vars = [f"m_{{{comp.replace(' ', '')}}}^{{{corr.split('/')[0].replace(' ', '')}}}" for corr in correntes_todas for comp in nomes_comp]
+        
+        for i, (desc, linha_A, val_B) in enumerate(zip(descricoes_equacoes, A_list, B_list)):
+            termos = []
+            for coef, simb in zip(linha_A, simbolos_vars):
+                if abs(coef) > 1e-5: # Ignora variáveis que não participam desta equação
+                    if coef == 1.0 and not termos: termos.append(f"{simb}")
+                    elif coef == 1.0: termos.append(f"+ {simb}")
+                    elif coef == -1.0 and not termos: termos.append(f"-{simb}")
+                    elif coef == -1.0: termos.append(f"- {simb}")
+                    else:
+                        sinal = "+" if coef > 0 else "-"
+                        if not termos: 
+                            termos.append(f"{sinal if sinal=='-' else ''}{abs(coef):.2f}{simb}")
+                        else: 
+                            termos.append(f"{sinal} {abs(coef):.2f}{simb}")
+            
+            # Monta a equação final
+            latex_eq = " ".join(termos) + f" = {val_B:.2f}"
+            
+            st.markdown(f"- **Eq {i+1}:** {desc}")
+            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ${latex_eq}$")
             
         st.markdown("<br>**3º Passo: Resolução via Matrizes**", unsafe_allow_html=True)
         st.markdown("O simulador resolveu a matriz encontrando o valor de cada incógnita $x$ que satisfizesse todas as equações acima ao mesmo tempo. Com as massas absolutas descobertas, as frações percentuais e totais foram calculadas por mera divisão/soma matemática para preencher a tabela abaixo.")
