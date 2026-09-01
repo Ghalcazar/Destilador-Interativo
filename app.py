@@ -358,7 +358,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             
             st.latex(f"{latex_X} = {latex_Ainv} \\cdot {latex_B}")
 
-            st.markdown("Realizando a multiplicação dessas duas matrizes, a álgebra linear nos devolve imediatamente a resposta de todo o sistema:")
+            st.markdown("Realizando a multiplicação dessas duas matrizes (linhas de $A^{-1}$ multiplicadas pela coluna de B), a álgebra linear nos devolve imediatamente a resposta de todo o sistema:")
             for simb, val in zip(simbolos_vars, X):
                 st.markdown(f"- ${simb} = {val:.2f}$ kg/h")
 
