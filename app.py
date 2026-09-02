@@ -326,12 +326,11 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                 st.markdown(f"- $x_{{{nomes_vars.index(var)}}}$ = {var}")
 
             st.markdown("<br>**As Equações Essenciais Filtradas**", unsafe_allow_html=True)
-            # Utilizando F (Flow/Vazão) como símbolo padrão para o balanço em LaTeX
             simbolos_vars = [f"F_{{{comp.replace(' ', '')}}}^{{{corr.split('/')[0].replace(' ', '')}}}" for corr in correntes_todas for comp in nomes_comp]
             
-            for i, (desc, linha_A, val_B) in enumerate(zip(descricoes_equacoes, A_list, B_list)):
+            for i, (desc, linha_A, val_B) in enumerate(descricoes_equacoes):
                 termos = []
-                for coef, simb in zip(linha_A, simbolos_vars):
+                for coef, simb in zip(A_mat[i], simbolos_vars):
                     if abs(coef) > 1e-5:
                         if coef == 1.0 and not termos: termos.append(f"{simb}")
                         elif coef == 1.0: termos.append(f"+ {simb}")
@@ -361,7 +360,30 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             st.latex(f"{latex_A} \\cdot {latex_X} = {latex_B}")
 
             st.markdown("<br>**Isolando as Incógnitas ($x = A^{-1} \\cdot B$)**", unsafe_allow_html=True)
-            st.markdown("Para descobrir o valor exato, isolamos o vetor $x$ multiplicando ambos os lados pela **Matriz Inversa** de $A$ ($A^{-1}$).")
+            
+            # --- Explicação Didática da Inversa (Gauss-Jordan) ---
+            det_A = np.linalg.det(A_mat)
+            st.info(f"""
+            🧮 **Como a Matriz Inversa ($A^{{-1}}$) é calculada?**  
+            Na álgebra linear, a inversa de uma matriz garante que $A \cdot A^{{-1}} = I$ (Matriz Identidade). Para que ela exista, o determinante da matriz não pode ser zero. 
+            * O simulador calculou o determinante do nosso sistema e encontrou **$\det(A) = {det_A:.2f}$**. Como é diferente de zero, o sistema tem solução única!
+            """)
+            
+            st.markdown("O método mais utilizado pelos computadores para encontrar a inversa é a **Eliminação de Gauss-Jordan**. O processo começa montando uma **Matriz Aumentada**, colocando a nossa Matriz $A$ lado a lado com uma Matriz Identidade ($I$) de mesmo tamanho:")
+            
+            # Matriz Aumentada [A | I]
+            I_mat = np.eye(num_vars)
+            cols_format = "c" * num_vars + "|" + "c" * num_vars
+            linhas_aug = []
+            for i in range(num_vars):
+                str_A = " & ".join([formata_zero(A_mat[i, j], 2) for j in range(num_vars)])
+                str_I = " & ".join([formata_zero(I_mat[i, j], 2) for j in range(num_vars)])
+                linhas_aug.append(str_A + " & " + str_I)
+            
+            latex_aug = r"\left[ \begin{array}{" + cols_format + r"}" + r" \\ ".join(linhas_aug) + r"\end{array} \right]"
+            st.latex(latex_aug)
+            
+            st.markdown("Em seguida, o algoritmo realiza sucessivas operações de soma, subtração e multiplicação entre as linhas até que o lado esquerdo se transforme em uma Matriz Identidade (apenas 1s na diagonal e 0s no resto). Quando isso acontece, os números que sobrarem no lado direito formarão a nossa matriz inversa $A^{-1}$:")
             
             A_inv = np.linalg.inv(A_mat) 
             linhas_Ainv_latex = [ " & ".join([formata_zero(coef, 2) for coef in linha]) for linha in A_inv ]
@@ -369,7 +391,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             
             st.latex(f"{latex_X} = {latex_Ainv} \\cdot {latex_B}")
 
-            st.markdown("Ao efetuar esta última multiplicação, as incógnitas são reveladas, concluindo a modelagem:")
+            st.markdown("Ao efetuar esta última multiplicação matricial (linha da inversa $\\times$ coluna de $B$), as incógnitas são reveladas, concluindo a modelagem:")
             for simb, val in zip(simbolos_vars, X):
                 st.markdown(f"- ${simb} = {val:.2f}$ kg/h")
 
