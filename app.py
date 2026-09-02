@@ -15,7 +15,7 @@ st.markdown("---")
 with st.sidebar:
     st.header("Configurações")
     num_correntes = st.number_input("Quantidade de Correntes", min_value=3, value=3, step=1)
-    num_componentes = st.number_input("Quantidade de Componentes", min_value=2, value=2, step=1)
+    num_componentes = st.number_input("Quantidade de Componentes", min_value=1, value=2, step=1)
     
     nomes_comp = []
     for i in range(num_componentes):
@@ -318,7 +318,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", width="stretch")
             **Por que existem valores negativos na Matriz $A$?**  
             Para o computador resolver o sistema, precisamos passar todas as incógnitas para o lado esquerdo e os números puros para o lado direito.  
             * **No Balanço Global:** A lógica "Tudo que Entra = Tudo que Sai" ($E = T + F$) vira $E - T - F = 0$.
-            * **Nas Porcentagens:** Se um componente é 20% do total da sua corrente ($F_A = 0.20 \\cdot (F_A + F_B)$), a matemática resulta em $0.80F_A - 0.20F_B = 0$.
+            * **Nas Porcentagens:** Se um componente é 20% do total da sua corrente ($F_A = 0.20 \cdot (F_A + F_B)$), a matemática resulta em $0.80F_A - 0.20F_B = 0$.
             """)
 
             st.markdown("<br>**Mapeamento das Incógnitas (Vetor $x$)**", unsafe_allow_html=True)
@@ -391,7 +391,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", width="stretch")
 
             st.markdown("Ao efetuar esta última multiplicação matricial (linha da inversa $\\times$ coluna de $B$), as incógnitas são reveladas, concluindo a modelagem:")
             for simb, val in zip(simbolos_vars, X):
-                st.markdown(f"- ${simb} = {val:.2f})
+                st.markdown(f"- ${simb} = {val:.2f}$")
 
     # ==========================================
     # 5. RESULTADOS E DIAGRAMA
