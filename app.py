@@ -15,7 +15,7 @@ st.markdown("---")
 with st.sidebar:
     st.header("Configurações")
     num_correntes = st.number_input("Quantidade de Correntes", min_value=3, value=3, step=1)
-    num_componentes = st.number_input("Quantidade de Componentes", min_value=1, value=2, step=1)
+    num_componentes = st.number_input("Quantidade de Componentes", min_value=2, value=2, step=1)
     
     nomes_comp = []
     for i in range(num_componentes):
