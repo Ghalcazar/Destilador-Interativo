@@ -176,7 +176,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                 if len(falt_vaz) == 1:
                     soma_v = sum([tabela_iter.loc[corr, (c, "Vazão")] for c in nomes_comp if pd.notna(tabela_iter.loc[corr, (c, "Vazão")])])
                     tabela_iter.loc[corr, (falt_vaz[0], "Vazão")] = v_total - soma_v
-                    logs_iterativos.append(f"🔸 **Vazão {falt_vaz[0]} ({corr}):** Diferença de massa = {(v_total - soma_v):.2f}")
+                    logs_iterativos.append(f"🔸 **Vazão {falt_vaz[0]} ({corr}):** Diferença de vazão parcial = {(v_total - soma_v):.2f}")
 
         for comp in nomes_comp:
             v_ent = tabela_iter.loc["Entrada", (comp, "Vazão")]
@@ -187,7 +187,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             elif pd.notna(v_ent) and v_sais.isna().sum() == 1:
                 s_falt = v_sais[v_sais.isna()].index[0]
                 tabela_iter.loc[s_falt, (comp, "Vazão")] = v_ent - v_sais.sum()
-                logs_iterativos.append(f"🟢 **Saída de {comp} ({s_falt}):** Balanço do componente = {(v_ent - v_sais.sum()):.2f}")
+                logs_iterativos.append(f"🟢 **Saída de {comp} ({s_falt}):** Balanço parcial do componente = {(v_ent - v_sais.sum()):.2f}")
 
         nans_depois = tabela_iter.isna().sum().sum()
         if nans_antes == nans_depois:
@@ -195,7 +195,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
 
     # --- FASE 3: A MATRIZ DE SEGURANÇA (O CÉREBRO MÁQUINA) ---
     num_vars = num_total_correntes * num_componentes
-    nomes_vars = [f"Massa de {comp} em {corr}" for corr in correntes_todas for comp in nomes_comp]
+    nomes_vars = [f"Vazão de {comp} em {corr}" for corr in correntes_todas for comp in nomes_comp]
     
     A_todas = []
     B_todas = []
@@ -264,23 +264,23 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     
     erros_eq = np.abs(np.dot(np.array(A_todas), X) - np.array(B_todas))
     if np.max(erros_eq) > 1e-4:
-        st.error("❌ **Dados Contraditórios.** As informações fornecidas violam a lei de conservação de massas. Revise os dados de entrada.")
+        st.error("❌ **Dados Contraditórios.** As informações fornecidas violam a lei de conservação de massa. Revise os dados de entrada.")
         st.stop()
 
     if np.any(X < -1e-4):
         indices_negativos = np.where(X < -1e-4)[0]
         vars_negativas = [nomes_vars[i] for i in indices_negativos]
-        st.error(f"❌ **Erro Físico (Massas Negativas):** O cálculo matemático foi forçado a 'sugar' massa para tentar equilibrar a coluna.\n\n📍 **O problema ocorreu em:** `{', '.join(vars_negativas)}`\n\nIsso geralmente acontece quando você exige que saia uma quantidade de matéria MAIOR do que a que entrou. Revise os fluxos.")
+        st.error(f"❌ **Erro Físico (Vazões Negativas):** O cálculo matemático foi forçado a gerar um fluxo negativo para tentar equilibrar a coluna.\n\n📍 **O problema ocorreu em:** `{', '.join(vars_negativas)}`\n\nIsso geralmente acontece quando você exige que saia uma vazão MAIOR do que a que entrou. Revise os fluxos de operação.")
         st.stop()
 
     tabela_final = pd.DataFrame(index=correntes_todas, columns=hierarquia_colunas)
     for s, corr in enumerate(correntes_todas):
-        massas = X[s * num_componentes : (s+1) * num_componentes]
-        v_tot = np.sum(massas)
+        vazoes_calc = X[s * num_componentes : (s+1) * num_componentes]
+        v_tot = np.sum(vazoes_calc)
         tabela_final.loc[corr, ("Geral", "Vazão Total")] = v_tot
         for c, comp in enumerate(nomes_comp):
-            tabela_final.loc[corr, (comp, "Vazão")] = massas[c]
-            tabela_final.loc[corr, (comp, "%")] = massas[c] / v_tot if v_tot > 1e-8 else 0.0
+            tabela_final.loc[corr, (comp, "Vazão")] = vazoes_calc[c]
+            tabela_final.loc[corr, (comp, "%")] = vazoes_calc[c] / v_tot if v_tot > 1e-8 else 0.0
 
     st.success("✅ Sistema solucionado com sucesso!")
 
@@ -309,11 +309,16 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             st.markdown("O simulador pegou tudo o que você preencheu + **o que ele já havia descoberto na 1ª Fase** e montou um sistema de equações focado apenas no que faltava descobrir.")
             
             st.info("""
-            * **Vetor $x$ (As Incógnitas):** A lista com as massas individuais que compõem o sistema.
+            * **Vetor $x$ (As Incógnitas):** A lista com as vazões parciais que compõem o sistema.
             * **Vetor $B$ (Os Resultados):** Fica do lado direito da igualdade ($=$). São os valores conhecidos (ex: 50.00).
             * **Matriz $A$ (Os Coeficientes):** Fica do lado esquerdo. Mostra as proporções de cada equação. 
             
             **A Estratégia da Matriz Quadrada:** O software descartou equações redundantes e separou exatamente o número de equações necessárias para criar uma matriz quadrada perfeita, permitindo o cálculo clássico de inversão.
+            
+            **Por que existem valores negativos na Matriz $A$?**  
+            Para o computador resolver o sistema, precisamos passar todas as incógnitas para o lado esquerdo e os números puros para o lado direito.  
+            * **No Balanço Global:** A lógica "Tudo que Entra = Tudo que Sai" ($E = T + F$) vira $E - T - F = 0$.
+            * **Nas Porcentagens:** Se um componente é 20% do total da sua corrente ($F_A = 0.20 \cdot (F_A + F_B)$), a matemática resulta em $0.80F_A - 0.20F_B = 0$.
             """)
 
             st.markdown("<br>**Mapeamento das Incógnitas (Vetor $x$)**", unsafe_allow_html=True)
@@ -321,7 +326,8 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
                 st.markdown(f"- $x_{{{nomes_vars.index(var)}}}$ = {var}")
 
             st.markdown("<br>**As Equações Essenciais Filtradas**", unsafe_allow_html=True)
-            simbolos_vars = [f"m_{{{comp.replace(' ', '')}}}^{{{corr.split('/')[0].replace(' ', '')}}}" for corr in correntes_todas for comp in nomes_comp]
+            # Utilizando F (Flow/Vazão) como símbolo padrão para o balanço em LaTeX
+            simbolos_vars = [f"F_{{{comp.replace(' ', '')}}}^{{{corr.split('/')[0].replace(' ', '')}}}" for corr in correntes_todas for comp in nomes_comp]
             
             for i, (desc, linha_A, val_B) in enumerate(zip(descricoes_equacoes, A_list, B_list)):
                 termos = []
@@ -344,7 +350,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             
             def formata_zero(val, casas=2):
                 val_rnd = round(val, casas)
-                if val_rnd == 0: return "0.00" if casas == 2 else "0.0000"
+                if val_rnd == 0: return "0.00"
                 return f"{val_rnd:.{casas}f}"
 
             linhas_A_latex = [ " & ".join([formata_zero(coef, 2) for coef in linha]) for linha in A_mat ]
@@ -358,7 +364,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             st.markdown("Para descobrir o valor exato, isolamos o vetor $x$ multiplicando ambos os lados pela **Matriz Inversa** de $A$ ($A^{-1}$).")
             
             A_inv = np.linalg.inv(A_mat) 
-            linhas_Ainv_latex = [ " & ".join([formata_zero(coef, 4) for coef in linha]) for linha in A_inv ]
+            linhas_Ainv_latex = [ " & ".join([formata_zero(coef, 2) for coef in linha]) for linha in A_inv ]
             latex_Ainv = r"\begin{bmatrix}" + r" \\ ".join(linhas_Ainv_latex) + r"\end{bmatrix}"
             
             st.latex(f"{latex_X} = {latex_Ainv} \\cdot {latex_B}")
@@ -371,7 +377,8 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     # 5. RESULTADOS E DIAGRAMA
     # ==========================================
     st.subheader("📋 Tabela Final de Resultados")
-    st.dataframe(tabela_final.style.format("{:.4f}"), use_container_width=True)
+    
+    st.dataframe(tabela_final.style.format("{:.2f}"), use_container_width=True)
 
     st.markdown("---")
     st.subheader("🗼 Esboço Final da Coluna com Composições")
