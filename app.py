@@ -391,7 +391,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", width="stretch")
 
             st.markdown("Ao efetuar esta última multiplicação matricial (linha da inversa $\\times$ coluna de $B$), as incógnitas são reveladas, concluindo a modelagem:")
             for simb, val in zip(simbolos_vars, X):
-                st.markdown(f"- ${simb} = {val:.2f}$ kg/h")
+                st.markdown(f"- ${simb} = {val:.2f})
 
     # ==========================================
     # 5. RESULTADOS E DIAGRAMA
@@ -409,11 +409,11 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", width="stretch")
     
     def montar_label_corrente(nome_corrente):
         v_tot = tabela_final.loc[nome_corrente, ("Geral", "Vazão Total")]
-        texto = f"{nome_corrente}\nTotal: {v_tot:.2f} kg/h\n"
+        texto = f"{nome_corrente}\nTotal: {v_tot:.2f}\n"
         for comp in nomes_comp:
             v_c = tabela_final.loc[nome_corrente, (comp, "Vazão")]
             p_c = tabela_final.loc[nome_corrente, (comp, "%")]
-            texto += f"- {comp}: {v_c:.2f} kg/h ({p_c * 100:.2f}%)\n"
+            texto += f"- {comp}: {v_c:.2f} ({p_c * 100:.2f}%)\n"
         return texto
 
     lbl_ent = montar_label_corrente("Entrada")
