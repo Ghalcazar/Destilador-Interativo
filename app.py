@@ -92,7 +92,7 @@ with col_dir:
 # 3. NÚCLEO DE CÁLCULO HÍBRIDO
 # ==========================================
 st.markdown("---")
-if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_width=True):
+if st.button("🔢 Calcular Balanço de Massa", type="primary", width="stretch"):
     
     # --- FASE 1: VALIDAÇÃO FÍSICA BÁSICA ---
     erros = []
@@ -318,7 +318,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             **Por que existem valores negativos na Matriz $A$?**  
             Para o computador resolver o sistema, precisamos passar todas as incógnitas para o lado esquerdo e os números puros para o lado direito.  
             * **No Balanço Global:** A lógica "Tudo que Entra = Tudo que Sai" ($E = T + F$) vira $E - T - F = 0$.
-            * **Nas Porcentagens:** Se um componente é 20% do total da sua corrente ($F_A = 0.20 \cdot (F_A + F_B)$), a matemática resulta em $0.80F_A - 0.20F_B = 0$.
+            * **Nas Porcentagens:** Se um componente é 20% do total da sua corrente ($F_A = 0.20 \\cdot (F_A + F_B)$), a matemática resulta em $0.80F_A - 0.20F_B = 0$.
             """)
 
             st.markdown("<br>**Mapeamento das Incógnitas (Vetor $x$)**", unsafe_allow_html=True)
@@ -328,9 +328,9 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
             st.markdown("<br>**As Equações Essenciais Filtradas**", unsafe_allow_html=True)
             simbolos_vars = [f"F_{{{comp.replace(' ', '')}}}^{{{corr.split('/')[0].replace(' ', '')}}}" for corr in correntes_todas for comp in nomes_comp]
             
-            for i, (desc, linha_A, val_B) in enumerate(descricoes_equacoes):
+            for i, (desc, linha_A, val_B) in enumerate(zip(descricoes_equacoes, A_list, B_list)):
                 termos = []
-                for coef, simb in zip(A_mat[i], simbolos_vars):
+                for coef, simb in zip(linha_A, simbolos_vars):
                     if abs(coef) > 1e-5:
                         if coef == 1.0 and not termos: termos.append(f"{simb}")
                         elif coef == 1.0: termos.append(f"+ {simb}")
@@ -361,17 +361,15 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
 
             st.markdown("<br>**Isolando as Incógnitas ($x = A^{-1} \\cdot B$)**", unsafe_allow_html=True)
             
-            # --- Explicação Didática da Inversa (Gauss-Jordan) ---
             det_A = np.linalg.det(A_mat)
             st.info(f"""
             🧮 **Como a Matriz Inversa ($A^{{-1}}$) é calculada?**  
-            Na álgebra linear, a inversa de uma matriz garante que $A \cdot A^{{-1}} = I$ (Matriz Identidade). Para que ela exista, o determinante da matriz não pode ser zero. 
-            * O simulador calculou o determinante do nosso sistema e encontrou **$\det(A) = {det_A:.2f}$**. Como é diferente de zero, o sistema tem solução única!
+            Na álgebra linear, a inversa de uma matriz garante que $A \\cdot A^{{-1}} = I$ (Matriz Identidade). Para que ela exista, o determinante da matriz não pode ser zero. 
+            * O simulador calculou o determinante do nosso sistema e encontrou **$\\det(A) = {det_A:.2f}$**. Como é diferente de zero, o sistema tem solução única!
             """)
             
             st.markdown("O método mais utilizado pelos computadores para encontrar a inversa é a **Eliminação de Gauss-Jordan**. O processo começa montando uma **Matriz Aumentada**, colocando a nossa Matriz $A$ lado a lado com uma Matriz Identidade ($I$) de mesmo tamanho:")
             
-            # Matriz Aumentada [A | I]
             I_mat = np.eye(num_vars)
             cols_format = "c" * num_vars + "|" + "c" * num_vars
             linhas_aug = []
@@ -400,7 +398,7 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
     # ==========================================
     st.subheader("📋 Tabela Final de Resultados")
     
-    st.dataframe(tabela_final.style.format("{:.2f}"), use_container_width=True)
+    st.dataframe(tabela_final.style.format("{:.2f}"), width="stretch")
 
     st.markdown("---")
     st.subheader("🗼 Esboço Final da Coluna com Composições")
@@ -428,4 +426,4 @@ if st.button("🔢 Calcular Balanço de Massa", type="primary", use_container_wi
         diagrama.node(node_id, corr, shape='ellipse')
         diagrama.edge('Coluna', node_id, label=lbl_sai)
         
-    st.graphviz_chart(diagrama, use_container_width=True)
+    st.graphviz_chart(diagrama, width="stretch")
