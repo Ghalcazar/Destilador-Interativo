@@ -1,0 +1,20 @@
+name: Keep Streamlit App Awake
+on:
+  schedule:
+    - cron: "0 */10 * * *" 
+  workflow_dispatch: 
+
+jobs:
+  keep-awake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+      - name: Configurar Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Enviar commit vazio
+        run: |
+          git commit --allow-empty -m "chore: commit vazio para manter app ativo"
+          git push
