@@ -1,20 +1,44 @@
 name: Keep Streamlit App Awake
+
 on:
   schedule:
-    - cron: "0 */10 * * *" 
-  workflow_dispatch: 
+    - cron: "0 */6 * * *"   # a cada 6 horas
+  workflow_dispatch:
 
 jobs:
-  keep-awake:
+  wake-up:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repositório
-        uses: actions/checkout@v4
-      - name: Configurar Git
+      - name: Instalar Playwright
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-      - name: Enviar commit vazio
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Visitar o app
+        env:
+          APP_URL: https://destilador-interativo-dq245t6bispjqsafpwbwkc.streamlit.app/
         run: |
-          git commit --allow-empty -m "chore: commit vazio para manter app ativo"
-          git push
+          python - <<'EOF'
+          import os
+          from playwright.sync_api import sync_playwright
+
+          url = os.environ["APP_URL"]
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              page.goto(url, wait_until="domcontentloaded", timeout=60000)
+
+              # Se o app estiver hibernado, clica no botão de reativar
+              try:
+                  btn = page.get_by_role("button", name="Yes, get this app back up!")
+                  btn.wait_for(timeout=10000)
+                  btn.click()
+                  print("App estava dormindo, reativando...")
+              except Exception:
+                  print("App já estava ativo.")
+
+              # Mantém a página aberta para a conexão websocket ser registrada
+              page.wait_for_timeout(30000)
+              browser.close()
+          EOF
